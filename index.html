@@ -3,85 +3,347 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mini App — Sesión 8</title>
+  <title>Mini App — Sesión 9</title>
 
-  <!-- SDK de Telegram: integra la página con el chat (tema, usuario, botones) -->
+  <!-- SDK de Telegram: tema, usuario, haptics y CloudStorage -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
   <!-- TON Connect UI: el puente estándar entre la app y la wallet -->
   <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+  <!-- Confeti para celebrar -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 
   <style>
-    /* Usa las variables de tema de Telegram: la app se ve nativa en claro y oscuro */
+    :root { --verde: #306e49; --dorado: #bc7916; --coral: #c0504d; --azul: #2e5a87; }
+    * { box-sizing: border-box; }
     body {
       font-family: -apple-system, system-ui, sans-serif;
       background: var(--tg-theme-bg-color, #ffffff);
       color: var(--tg-theme-text-color, #1f1f1f);
-      margin: 0; padding: 24px; text-align: center;
+      margin: 0; padding: 20px; text-align: center;
     }
-    h1 { font-size: 1.3rem; color: #306e49; }
-    .card {
-      background: var(--tg-theme-secondary-bg-color, #f4f2ec);
-      border-radius: 12px; padding: 16px; margin: 16px 0;
-      word-break: break-all; font-size: 0.9rem;
+    h1 { font-size: 1.25rem; color: var(--verde); margin: 8px 0 2px; }
+    .sub { color: var(--tg-theme-hint-color, #7a7a72); font-size: .85rem; margin: 0 0 14px; }
+
+    /* --- El latido de la cadena --- */
+    .latido { background: linear-gradient(135deg, var(--verde), #1e4a30);
+              color: #fff; border-radius: 16px; padding: 14px; margin: 14px 0; }
+    .latido .label { font-size: .72rem; opacity: .85; letter-spacing: .06em; text-transform: uppercase; }
+    .bloque { font-size: 1.9rem; font-weight: 800; font-variant-numeric: tabular-nums;
+              transition: transform .15s ease; }
+    .bloque.pulso { transform: scale(1.12); }
+    .contador { font-size: .78rem; opacity: .9; margin-top: 4px; }
+    .punto { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+             background: #7ee2a8; margin-right: 6px; animation: latir 1.6s infinite;
+             vertical-align: middle; }
+    @keyframes latir { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+
+    #ton-connect { display: flex; justify-content: center; margin: 18px 0 10px; }
+
+    .card { background: var(--tg-theme-secondary-bg-color, #f4f2ec);
+            border-radius: 16px; padding: 16px; margin: 12px 0; text-align: left; }
+    .label { color: var(--tg-theme-hint-color, #7a7a72); font-size: .74rem;
+             text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .balance { font-size: 2.1rem; font-weight: 800; color: var(--dorado); }
+    .fiat { font-size: .95rem; margin-top: 2px; }
+    .addr { font-family: ui-monospace, monospace; font-size: .78rem; word-break: break-all; }
+    .btn { margin-top: 8px; border: 0; border-radius: 10px; padding: 8px 14px;
+           background: var(--verde); color: #fff; font-size: .85rem; font-weight: 600; }
+    .btn.sec { background: transparent; color: var(--verde); border: 1.5px solid var(--verde); }
+    .tx { padding: 8px 0; border-top: 1px solid rgba(122,122,114,.25); font-size: .82rem;
+          display: flex; justify-content: space-between; gap: 8px; }
+    .tx .monto.in { color: var(--verde); font-weight: 700; }
+    .tx .monto.out { color: var(--coral); font-weight: 700; }
+    .vacio { font-size: .85rem; color: var(--tg-theme-hint-color, #7a7a72); font-style: italic; }
+
+    /* --- Meta de ahorro --- */
+    .meta-form input {
+      width: 100%; margin: 6px 0; padding: 10px; border-radius: 10px;
+      border: 1.5px solid rgba(122,122,114,.4); font-size: .95rem;
+      background: var(--tg-theme-bg-color, #fff); color: inherit;
     }
-    .label { color: #7a7a72; font-size: 0.8rem; margin-bottom: 4px; }
-    .balance { font-size: 1.6rem; font-weight: bold; color: #bc7916; }
-    #ton-connect { display: flex; justify-content: center; margin: 20px 0; }
+    .barra-fondo { background: rgba(122,122,114,.25); border-radius: 999px;
+                   height: 18px; overflow: hidden; margin: 10px 0 4px; }
+    .barra { height: 100%; width: 0%; border-radius: 999px;
+             background: linear-gradient(90deg, var(--verde), var(--dorado));
+             transition: width .8s ease; }
+    .meta-detalle { font-size: .85rem; display: flex; justify-content: space-between; }
+
+    /* --- Radar DeFi --- */
+    .proto { display: flex; justify-content: space-between; align-items: center;
+             padding: 9px 0; border-top: 1px solid rgba(122,122,114,.25); }
+    .proto:first-of-type { border-top: 0; }
+    .proto .nombre { font-weight: 700; font-size: .92rem; }
+    .proto .tipo { font-size: .74rem; color: var(--tg-theme-hint-color, #7a7a72); }
+    .proto .tvl { font-weight: 800; color: var(--azul); font-size: .95rem;
+                  font-variant-numeric: tabular-nums; }
+    .nota { font-size: .74rem; color: var(--tg-theme-hint-color, #7a7a72);
+            font-style: italic; margin-top: 8px; }
   </style>
 </head>
 <body>
   <h1>Blockchain en la vida real 🎓</h1>
-  <p id="saludo">Cargando…</p>
+  <p class="sub" id="saludo">Cargando…</p>
 
-  <!-- Aquí TON Connect dibuja su botón "Connect Wallet" -->
+  <!-- La cadena late en vivo -->
+  <div class="latido">
+    <div class="label"><span class="punto"></span>TON mainnet · en vivo</div>
+    <div class="bloque" id="bloque">—</div>
+    <div class="contador" id="sellados">bloques sellados desde que abriste la app: 0</div>
+  </div>
+
   <div id="ton-connect"></div>
 
+  <!-- Panel de la wallet -->
   <div class="card" id="panel" style="display:none">
-    <div class="label">Dirección conectada (formato raw)</div>
-    <div id="direccion">—</div>
-    <div class="label" style="margin-top:12px">Balance</div>
+    <div class="label">Balance</div>
     <div class="balance" id="balance">—</div>
+    <div class="fiat" id="fiat"></div>
+
+    <div class="label" style="margin-top:14px">Tu dirección en el libro público</div>
+    <div class="addr" id="direccion">—</div>
+    <button class="btn" id="btnCopiar">Copiar dirección</button>
+
+    <div class="label" style="margin-top:14px">Últimos movimientos</div>
+    <div id="txs"><div class="vacio">conecta para consultar…</div></div>
+  </div>
+
+  <!-- Meta de ahorro: se guarda en el CloudStorage de Telegram -->
+  <div class="card" id="cardMeta">
+    <div class="label">🎯 Mi meta de ahorro</div>
+
+    <div id="metaForm" class="meta-form">
+      <input id="metaNombre" type="text" placeholder="Nombre de la meta (ej. Fondo de emergencia)" maxlength="40">
+      <input id="metaMonto" type="number" placeholder="Monto objetivo en TON (ej. 10)" min="0.01" step="0.01">
+      <button class="btn" id="btnGuardarMeta">Guardar meta</button>
+    </div>
+
+    <div id="metaVista" style="display:none">
+      <div style="font-weight:700; font-size:1rem" id="metaTitulo">—</div>
+      <div class="barra-fondo"><div class="barra" id="metaBarra"></div></div>
+      <div class="meta-detalle">
+        <span id="metaAvance">—</span>
+        <span id="metaPct" style="font-weight:800; color:var(--dorado)">0%</span>
+      </div>
+      <button class="btn sec" id="btnEditarMeta">Cambiar meta</button>
+      <div class="nota" id="metaNota">La meta no vive en la blockchain: vive en la nube de Telegram, atada a ti y a este bot.</div>
+    </div>
+  </div>
+
+  <!-- Radar DeFi: TVL en vivo desde DefiLlama -->
+  <div class="card">
+    <div class="label">📡 Radar DeFi en TON · TVL en vivo</div>
+    <div id="protocolos"><div class="vacio">consultando DefiLlama…</div></div>
+    <div class="nota">Fuente: DefiLlama, la misma que usamos en clase. Esto es un agregador de <b>información</b> —
+      un agregador real (como los que vimos con Morpho) añade el botón de ejecutar. Nada aquí es recomendación de inversión.</div>
   </div>
 
   <script>
     // ---------- 1. Integración con Telegram ----------
     const tg = window.Telegram.WebApp;
-    tg.ready();                 // avisa a Telegram que la app cargó
-    tg.expand();                // ocupa toda la pantalla
-
+    tg.ready(); tg.expand();
     const usuario = tg.initDataUnsafe?.user;
     document.getElementById('saludo').textContent = usuario
       ? `Hola, ${usuario.first_name} — esta página vive dentro de Telegram.`
       : 'Abre esta página desde el bot para ver la magia completa.';
+    const vibra = (tipo) => { try { tg.HapticFeedback.notificationOccurred(tipo); } catch(e){} };
 
-    // ---------- 2. Conexión con la wallet vía TON Connect ----------
-    // Manifiesto hosteado en el GitHub de Paz (mpazgomezm)
+    // ---------- 2. El latido de la cadena ----------
+    let primerBloque = null;
+    async function latir() {
+      try {
+        const r = await fetch('https://toncenter.com/api/v2/getMasterchainInfo');
+        const d = await r.json();
+        const seq = d.result.last.seqno;
+        const el = document.getElementById('bloque');
+        const txt = seq.toLocaleString('es-MX');
+        if (el.textContent !== txt) {
+          el.textContent = txt;
+          el.classList.add('pulso');
+          setTimeout(() => el.classList.remove('pulso'), 180);
+        }
+        if (primerBloque === null) primerBloque = seq;
+        document.getElementById('sellados').textContent =
+          `bloques sellados desde que abriste la app: ${(seq - primerBloque).toLocaleString('es-MX')}`;
+      } catch (e) { /* reintenta en el próximo ciclo */ }
+    }
+    latir();
+    setInterval(latir, 6000);
+
+    // ---------- 3. Conexión con la wallet ----------
     const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
       manifestUrl: 'https://mpazgomezm.github.io/miniapp-sesion9/tonconnect-manifest.json',
       buttonRootId: 'ton-connect'
     });
 
-    // ---------- 3. Al conectar: mostrar dirección y consultar balance ----------
+    let addrActual = null;
+    let balanceTON = 0;   // lo usa también la meta de ahorro
+
     tonConnectUI.onStatusChange(async (wallet) => {
       const panel = document.getElementById('panel');
       if (!wallet) { panel.style.display = 'none'; return; }
-
-      const addr = wallet.account.address;   // formato raw: 0:abc123…
-      document.getElementById('direccion').textContent = addr;
+      confetti({ particleCount: 120, spread: 75, origin: { y: 0.6 },
+                 colors: ['#306e49', '#bc7916', '#ffffff'] });
+      vibra('success');
+      addrActual = wallet.account.address;
+      document.getElementById('direccion').textContent = addrActual;
       panel.style.display = 'block';
+      await consultarBalance(addrActual);
+      consultarMovimientos(addrActual);
+      pintarMeta();   // refresca la barra con el balance real
+    });
 
-      // Consulta de balance con la API pública de toncenter (1 req/seg sin API key)
+    // ---------- 4. Balance + conversión a pesos y dólares ----------
+    async function consultarBalance(addr) {
       try {
-        const r = await fetch(
-          `https://toncenter.com/api/v2/getAddressBalance?address=${addr}`);
-        const data = await r.json();
-        // El balance llega en nanotons: 1 TON = 1.000.000.000 nanotons
-        const ton = Number(data.result) / 1e9;
-        document.getElementById('balance').textContent = `${ton.toFixed(4)} TON`;
+        const r = await fetch(`https://toncenter.com/api/v2/getAddressBalance?address=${addr}`);
+        const d = await r.json();
+        balanceTON = Number(d.result) / 1e9;
+        document.getElementById('balance').textContent = `${balanceTON.toFixed(4)} TON`;
+        const p = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd,mxn');
+        const precio = (await p.json())['the-open-network'];
+        document.getElementById('fiat').textContent =
+          `≈ $${(balanceTON * precio.mxn).toFixed(2)} MXN · US$${(balanceTON * precio.usd).toFixed(2)}  (1 TON = $${precio.mxn.toFixed(2)} MXN)`;
       } catch (e) {
         document.getElementById('balance').textContent = 'No se pudo consultar';
       }
+    }
+
+    // ---------- 5. Últimos movimientos ----------
+    async function consultarMovimientos(addr) {
+      const cont = document.getElementById('txs');
+      try {
+        const r = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${addr}&limit=3`);
+        const d = await r.json();
+        if (!d.result || d.result.length === 0) {
+          cont.innerHTML = '<div class="vacio">sin movimientos aún — una cuenta recién nacida en la cadena 🐣</div>';
+          return;
+        }
+        cont.innerHTML = d.result.map(tx => {
+          const entrada = Number(tx.in_msg?.value || 0);
+          const salida = (tx.out_msgs || []).reduce((s, m) => s + Number(m.value || 0), 0);
+          const neto = (entrada - salida) / 1e9;
+          const fecha = new Date(tx.utime * 1000).toLocaleString('es-MX',
+                        { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+          return `<div class="tx"><span>${fecha}</span>
+                  <span class="monto ${neto >= 0 ? 'in' : 'out'}">${neto >= 0 ? '+' : ''}${neto.toFixed(4)} TON</span></div>`;
+        }).join('');
+      } catch (e) {
+        cont.innerHTML = '<div class="vacio">no se pudieron consultar (límite de la API pública — reintenta)</div>';
+      }
+    }
+
+    // ---------- 6. Meta de ahorro (CloudStorage de Telegram) ----------
+    // La meta se guarda en la nube de Telegram, por usuario y por bot:
+    // ni en la blockchain (no es dinero) ni en un servidor nuestro (no existe).
+    // Si CloudStorage no está disponible (app vieja o navegador), cae a localStorage.
+    const nube = {
+      get: (k) => new Promise(res => {
+        try { tg.CloudStorage.getItem(k, (err, v) => res(err ? null : v)); }
+        catch (e) { res(localStorage.getItem(k)); }
+      }),
+      set: (k, v) => new Promise(res => {
+        try { tg.CloudStorage.setItem(k, v, () => res(true)); }
+        catch (e) { localStorage.setItem(k, v); res(true); }
+      })
+    };
+
+    let meta = null;   // { nombre, monto }
+
+    async function cargarMeta() {
+      const crudo = await nube.get('meta');
+      if (crudo) { try { meta = JSON.parse(crudo); } catch (e) { meta = null; } }
+      pintarMeta();
+    }
+
+    function pintarMeta() {
+      const form = document.getElementById('metaForm');
+      const vista = document.getElementById('metaVista');
+      if (!meta) { form.style.display = 'block'; vista.style.display = 'none'; return; }
+      form.style.display = 'none'; vista.style.display = 'block';
+      document.getElementById('metaTitulo').textContent = `${meta.nombre}: ${meta.monto} TON`;
+      const pct = Math.min(100, (balanceTON / meta.monto) * 100);
+      document.getElementById('metaBarra').style.width = pct + '%';
+      document.getElementById('metaPct').textContent = pct.toFixed(1) + '%';
+      document.getElementById('metaAvance').textContent =
+        addrActual ? `${balanceTON.toFixed(4)} de ${meta.monto} TON`
+                   : 'conecta tu wallet para medir el avance';
+      if (pct >= 100) {
+        confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 },
+                   colors: ['#306e49', '#bc7916', '#ffffff'] });
+        vibra('success');
+      }
+    }
+
+    document.getElementById('btnGuardarMeta').addEventListener('click', async () => {
+      const nombre = document.getElementById('metaNombre').value.trim() || 'Mi meta';
+      const monto = parseFloat(document.getElementById('metaMonto').value);
+      if (!monto || monto <= 0) { vibra('error'); return; }
+      meta = { nombre, monto };
+      await nube.set('meta', JSON.stringify(meta));
+      vibra('success');
+      pintarMeta();
+    });
+
+    document.getElementById('btnEditarMeta').addEventListener('click', () => {
+      document.getElementById('metaNombre').value = meta?.nombre || '';
+      document.getElementById('metaMonto').value = meta?.monto || '';
+      meta = null;
+      pintarMeta();
+    });
+
+    cargarMeta();
+
+    // ---------- 7. Radar DeFi: TVL en vivo desde DefiLlama ----------
+    // Lista curada de protocolos del ecosistema TON. Cada consulta a
+    // api.llama.fi/tvl/{slug} devuelve un solo número (el TVL en USD).
+    // Si un slug falla (DefiLlama los renombra a veces), esa fila se omite.
+    const PROTOCOLOS = [
+      { slug: 'tonstakers',    nombre: 'Tonstakers', tipo: 'Staking líquido' },
+      { slug: 'ston.fi',       nombre: 'STON.fi',    tipo: 'DEX (intercambio)' },
+      { slug: 'dedust',        nombre: 'DeDust',     tipo: 'DEX (intercambio)' },
+      { slug: 'evaa-protocol', nombre: 'EVAA',       tipo: 'Préstamos (lending)' },
+      { slug: 'bemo',          nombre: 'bemo',       tipo: 'Staking líquido' },
+    ];
+
+    function fmtUSD(n) {
+      if (n >= 1e9) return 'US$' + (n / 1e9).toFixed(2) + ' B';
+      if (n >= 1e6) return 'US$' + (n / 1e6).toFixed(1) + ' M';
+      return 'US$' + Math.round(n).toLocaleString('es-MX');
+    }
+
+    async function radar() {
+      const resultados = await Promise.all(PROTOCOLOS.map(async p => {
+        try {
+          const r = await fetch(`https://api.llama.fi/tvl/${encodeURIComponent(p.slug)}`);
+          if (!r.ok) return null;
+          const tvl = await r.json();
+          return (typeof tvl === 'number' && tvl > 0) ? { ...p, tvl } : null;
+        } catch (e) { return null; }
+      }));
+      const vivos = resultados.filter(Boolean).sort((a, b) => b.tvl - a.tvl);
+      const cont = document.getElementById('protocolos');
+      if (vivos.length === 0) {
+        cont.innerHTML = '<div class="vacio">DefiLlama no respondió — reintenta (o narra la falla: la infraestructura gratuita también tiene límites)</div>';
+        return;
+      }
+      cont.innerHTML = vivos.map(p =>
+        `<div class="proto">
+           <div><div class="nombre">${p.nombre}</div><div class="tipo">${p.tipo}</div></div>
+           <div class="tvl">${fmtUSD(p.tvl)}</div>
+         </div>`).join('');
+    }
+    radar();
+
+    // ---------- 8. Copiar dirección ----------
+    document.getElementById('btnCopiar').addEventListener('click', async () => {
+      if (!addrActual) return;
+      try {
+        await navigator.clipboard.writeText(addrActual);
+        vibra('success');
+        const b = document.getElementById('btnCopiar');
+        b.textContent = '¡Copiada!';
+        setTimeout(() => b.textContent = 'Copiar dirección', 1500);
+      } catch (e) { vibra('error'); }
     });
   </script>
 </body>
