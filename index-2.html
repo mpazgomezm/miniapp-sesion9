@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini App — Sesión 8</title>
+
+  <!-- SDK de Telegram: integra la página con el chat (tema, usuario, botones) -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- TON Connect UI: el puente estándar entre la app y la wallet -->
+  <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+
+  <style>
+    /* Usa las variables de tema de Telegram: la app se ve nativa en claro y oscuro */
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: var(--tg-theme-bg-color, #ffffff);
+      color: var(--tg-theme-text-color, #1f1f1f);
+      margin: 0; padding: 24px; text-align: center;
+    }
+    h1 { font-size: 1.3rem; color: #306e49; }
+    .card {
+      background: var(--tg-theme-secondary-bg-color, #f4f2ec);
+      border-radius: 12px; padding: 16px; margin: 16px 0;
+      word-break: break-all; font-size: 0.9rem;
+    }
+    .label { color: #7a7a72; font-size: 0.8rem; margin-bottom: 4px; }
+    .balance { font-size: 1.6rem; font-weight: bold; color: #bc7916; }
+    #ton-connect { display: flex; justify-content: center; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>Blockchain en la vida real 🎓</h1>
+  <p id="saludo">Cargando…</p>
+
+  <!-- Aquí TON Connect dibuja su botón "Connect Wallet" -->
+  <div id="ton-connect"></div>
+
+  <div class="card" id="panel" style="display:none">
+    <div class="label">Dirección conectada (formato raw)</div>
+    <div id="direccion">—</div>
+    <div class="label" style="margin-top:12px">Balance</div>
+    <div class="balance" id="balance">—</div>
+  </div>
+
+  <script>
+    // ---------- 1. Integración con Telegram ----------
+    const tg = window.Telegram.WebApp;
+    tg.ready();                 // avisa a Telegram que la app cargó
+    tg.expand();                // ocupa toda la pantalla
+
+    const usuario = tg.initDataUnsafe?.user;
+    document.getElementById('saludo').textContent = usuario
+      ? `Hola, ${usuario.first_name} — esta página vive dentro de Telegram.`
+      : 'Abre esta página desde el bot para ver la magia completa.';
+
+    // ---------- 2. Conexión con la wallet vía TON Connect ----------
+    // Manifiesto hosteado en el GitHub de Paz (mpazgomezm)
+    const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+      manifestUrl: 'https://mpazgomezm.github.io/miniapp-sesion9/tonconnect-manifest.json',
+      buttonRootId: 'ton-connect'
+    });
+
+    // ---------- 3. Al conectar: mostrar dirección y consultar balance ----------
+    tonConnectUI.onStatusChange(async (wallet) => {
+      const panel = document.getElementById('panel');
+      if (!wallet) { panel.style.display = 'none'; return; }
+
+      const addr = wallet.account.address;   // formato raw: 0:abc123…
+      document.getElementById('direccion').textContent = addr;
+      panel.style.display = 'block';
+
+      // Consulta de balance con la API pública de toncenter (1 req/seg sin API key)
+      try {
+        const r = await fetch(
+          `https://toncenter.com/api/v2/getAddressBalance?address=${addr}`);
+        const data = await r.json();
+        // El balance llega en nanotons: 1 TON = 1.000.000.000 nanotons
+        const ton = Number(data.result) / 1e9;
+        document.getElementById('balance').textContent = `${ton.toFixed(4)} TON`;
+      } catch (e) {
+        document.getElementById('balance').textContent = 'No se pudo consultar';
+      }
+    });
+  </script>
+</body>
+</html>
